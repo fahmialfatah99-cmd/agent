@@ -1,272 +1,362 @@
 # Super Intelligent Agent
 
-Lebih canggih dari OpenClaw dan Hermes Agent - Agent AI dengan kemampuan Planning, Reasoning, Execution, dan Reflection.
+A next-generation AI agent framework with multi-provider support, advanced reasoning capabilities, and multi-agent orchestration.
 
-## 🏗️ Arsitektur
+## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      Frontend (Next.js)                     │
-│              Tailwind + Framer Motion + shadcn/ui           │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    API Gateway (FastAPI)                    │
-│                  WebSocket Support for Streaming            │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     Agent Core Loop                         │
+│                      Frontend (Next.js 15)                   │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │
-│  │ Planner  │→ │ Reasoner │→ │ Executor │→ │ Reflector│    │
+│  │   Chat   │  │Dashboard │  │ Settings │  │  Tools   │    │
 │  └──────────┘  └──────────┘  └──────────┘  └──────────┘    │
 └─────────────────────────────────────────────────────────────┘
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        ▼                     ▼                     ▼
-┌───────────────┐   ┌───────────────┐   ┌───────────────┐
-│    Memory     │   │    Tools      │   │  Providers    │
-│  Short/Long   │   │   Registry    │   │ Multi-LLM     │
-└───────────────┘   └───────────────┘   └───────────────┘
+                            │
+                            │ REST / WebSocket
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    API Layer (FastAPI)                       │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │
+│  │  Auth    │  │Rate Limit│  │   CORS   │  │ Logging  │    │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘    │
+└─────────────────────────────────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     ★ AGENT ENGINE ★                        │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │
+│  │ Planner  │→ │ Reasoner │→ │ Executor │→ │Reflector │    │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘    │
+│       ▲                                              │      │
+│       └────────────── Feedback Loop ──────────────────┘      │
+└─────────────────────────────────────────────────────────────┘
+          │                    │                    │
+          ▼                    ▼                    ▼
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│   Memory     │    │    Tools     │    │  Providers   │
+│ ┌──────────┐ │    │ ┌──────────┐ │    │ ┌──────────┐ │
+│ │ Short    │ │    │ │ Search   │ │    │ │ OpenAI   │ │
+│ │ Long     │ │    │ │ Code     │ │    │ │ Anthropic│ │
+│ │ Episodic │ │    │ │ File     │ │    │ │ Google   │ │
+│ │ Semantic │ │    │ │ API      │ │    │ │ Ollama   │ │
+│ └──────────┘ │    │ └──────────┘ │    │ └──────────┘ │
+└──────────────┘    └──────────────┘    └──────────────┘
 ```
 
-## 🚀 Fitur Utama
+## ✨ Features
 
-### 1. **Multi-Provider LLM**
-- ✅ OpenAI (GPT-4, GPT-3.5)
-- ✅ Anthropic (Claude)
-- ✅ Google (Gemini)
-- ✅ Ollama (Local models)
-- ✅ Easy to extend dengan provider custom
+### 🧠 Advanced Agent Core
+- **Planner**: Breaks down complex goals into actionable steps
+- **Reasoner**: Chain-of-thought and ReAct reasoning patterns
+- **Executor**: Reliable tool execution with error handling
+- **Reflector**: Self-evaluation and iterative improvement
+- **Router**: Intent classification and task routing
+- **Guardrails**: Safety filters and content moderation
 
-### 2. **Agent Core (Planner → Reasoner → Executor → Reflector)**
-- **Planner**: Memecah goal kompleks menjadi langkah-langkah terstruktur
-- **Reasoner**: Analisis mendalam dengan chain-of-thought
-- **Executor**: Eksekusi tool dan action dengan error handling
-- **Reflector**: Self-reflection dan continuous improvement
+### 🔌 Multi-Provider Support
+- OpenAI (GPT-4, GPT-3.5)
+- Anthropic (Claude 3, Claude 2)
+- Google (Gemini Pro, Gemini Ultra)
+- Mistral (Mistral Large, Mixtral)
+- Groq (Ultra-fast inference)
+- Ollama (Local models)
+- Together AI (Open models)
 
-### 3. **Memory System**
-- Short-term memory (working memory)
-- Long-term memory (dengan vector embeddings)
-- Conversation memory
-- Consolidation mechanism
+### 💾 Memory System
+- **Short-term**: Conversation buffer with sliding window
+- **Long-term**: Vector database storage (Qdrant/Chroma)
+- **Episodic**: Past interaction recall
+- **Semantic**: Knowledge graph integration
 
-### 4. **Tool System**
-- Registry-based tool management
-- Auto-discovery
-- Function wrapping decorator
-- Built-in tools: search, calculate, time, dll.
+### 🛠️ Extensible Tool System
+- Web search (Tavily, Serper)
+- Code execution (sandboxed)
+- File operations (read/write/upload)
+- API calls (REST/GraphQL)
+- Custom user-defined tools
 
-### 5. **Real-time Streaming**
-- WebSocket support untuk live updates
-- Event-driven architecture
-- Progress tracking
+### 👥 Multi-Agent Orchestration
+- **Swarm**: Decentralized agent collaboration
+- **Supervisor**: Hierarchical task delegation
+- **Message Protocol**: Inter-agent communication
 
-## 📁 Struktur Project
-
-```
-super-intelligent-agent/
-├── apps/
-│   ├── api/              # FastAPI backend
-│   │   ├── main.py
-│   │   ├── routers/
-│   │   ├── services/
-│   │   └── requirements.txt
-│   └── web/              # Next.js frontend
-│       ├── components/
-│       ├── pages/
-│       └── package.json
-├── packages/
-│   ├── core/             # Core agent logic
-│   │   ├── providers/    # LLM providers
-│   │   ├── agent/        # Planner, Reasoner, Executor, Reflector
-│   │   ├── memory/       # Memory systems
-│   │   └── tools/        # Tool registry
-│   ├── shared/           # Shared types & config
-│   └── tools/            # Additional tools
-├── infra/
-│   ├── docker/           # Docker configuration
-│   └── k8s/              # Kubernetes manifests
-├── scripts/              # Utility scripts
-└── tests/                # Test suite
-```
-
-## 🛠️ Tech Stack
-
-### Backend
-- Python 3.12+
-- FastAPI
-- Pydantic v2
-- httpx (async HTTP)
-
-### Frontend
-- Next.js 15
-- TypeScript
-- Tailwind CSS
-- Framer Motion
-- shadcn/ui
-
-### Database & Storage
-- PostgreSQL (relational data)
-- Qdrant (vector database)
-- Redis (caching & sessions)
-
-### Infrastructure
-- Docker & Docker Compose
-- Kubernetes ready
-- Deployable ke Fly.io / Railway / Vercel
+### 📊 Evaluation & Monitoring
+- Built-in benchmarks
+- Performance metrics
+- Cost tracking
+- Latency monitoring
 
 ## 🚀 Quick Start
 
-### 1. Clone & Install
+### Prerequisites
+- Python 3.12+
+- Node.js 20+
+- Docker & Docker Compose
+- PostgreSQL, Redis, Qdrant (or use Docker Compose)
+
+### Installation
 
 ```bash
-git clone <repository>
-cd super-intelligent-agent
+# Clone the repository
+git clone <repository-url>
+cd super-agent
 
 # Install backend dependencies
-pip install -r apps/api/requirements.txt
+cd apps/api
+pip install -r requirements.txt
 
 # Install frontend dependencies
-cd apps/web && npm install
+cd ../web
+npm install
+
+# Setup environment variables
+cp ../../.env.example .env
+# Edit .env with your API keys
 ```
 
-### 2. Environment Setup
-
-Buat file `.env`:
-```bash
-LLM_API_KEY=your_api_key_here
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/agent_db
-REDIS_URL=redis://localhost:6379
-```
-
-### 3. Run with Docker (Recommended)
+### Running Locally
 
 ```bash
-docker-compose -f infra/docker/docker-compose.yml up -d
-```
+# Option 1: Run services separately
 
-### 4. Run Manually
-
-**Backend:**
-```bash
+# Terminal 1 - Backend
 cd apps/api
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
+uvicorn src.main:app --reload --port 8000
 
-**Frontend:**
-```bash
+# Terminal 2 - Frontend
 cd apps/web
 npm run dev
+
+# Option 2: Use Docker Compose
+cd infra/docker
+docker-compose up -d
 ```
 
-## 📡 API Endpoints
+### Environment Variables
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | Health check |
-| POST | `/providers/configure` | Configure LLM provider |
-| POST | `/agents/create` | Create new agent |
-| POST | `/agents/{id}/run` | Run agent with goal |
-| GET | `/agents/{id}/status` | Get agent status |
-| POST | `/agents/{id}/reset` | Reset agent |
-| DELETE | `/agents/{id}` | Delete agent |
-| GET | `/tools/list` | List available tools |
-| WS | `/ws/agents/{id}` | WebSocket streaming |
+```bash
+# API Keys (at least one required)
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+GOOGLE_API_KEY=...
+GROQ_API_KEY=...
 
-## 💡 Contoh Penggunaan
+# Database
+DATABASE_URL=postgresql://user:pass@localhost:5432/superagent
+REDIS_URL=redis://localhost:6379
+QDRANT_URL=http://localhost:6333
 
-### Via API
-
-```python
-import requests
-
-# Configure provider
-requests.post("http://localhost:8000/providers/configure", json={
-    "provider_type": "openai",
-    "api_key": "sk-...",
-    "model": "gpt-4"
-})
-
-# Create agent
-requests.post("http://localhost:8000/agents/create?agent_id=my-agent", json={
-    "provider_type": "openai",
-    "model": "gpt-4"
-})
-
-# Run agent
-response = requests.post("http://localhost:8000/agents/my-agent/run", json={
-    "goal": "Research about quantum computing and summarize key concepts",
-    "context": "Focus on practical applications"
-})
-
-print(response.json())
+# App Config
+APP_ENV=development
+SECRET_KEY=your-secret-key
+LOG_LEVEL=INFO
 ```
 
-### Via Python SDK (Coming Soon)
+## 📁 Project Structure
 
-```python
-from super_agent import Agent, ProviderType
-
-agent = Agent(
-    provider_type=ProviderType.OPENAI,
-    model="gpt-4",
-    enable_reflection=True
-)
-
-result = await agent.run(
-    goal="Analyze market trends for AI startups",
-    context="Focus on Southeast Asia region"
-)
-
-print(result.plan)
-print(result.execution_history)
 ```
+super-agent/
+├── apps/
+│   ├── web/                        # Next.js frontend
+│   │   ├── src/
+│   │   │   ├── app/                # App Router pages
+│   │   │   │   ├── (chat)/         # Main chat interface
+│   │   │   │   ├── (dashboard)/    # Analytics & metrics
+│   │   │   │   └── (settings)/     # Configuration UI
+│   │   │   ├── components/
+│   │   │   │   ├── ui/             # Primitive components
+│   │   │   │   ├── chat/           # Chat-specific components
+│   │   │   │   ├── agent/          # Agent visualization
+│   │   │   │   └── layout/         # Layout components
+│   │   │   ├── hooks/              # React hooks
+│   │   │   ├── stores/             # Zustand state management
+│   │   │   ├── services/           # API clients
+│   │   │   ├── lib/                # Utilities
+│   │   │   └── types/              # TypeScript types
+│   │   └── package.json
+│   │
+│   └── api/                        # FastAPI backend
+│       ├── src/
+│       │   ├── main.py             # Application entry point
+│       │   ├── config/             # Configuration management
+│       │   ├── api/                # API layer
+│       │   │   ├── router.py       # Root router
+│       │   │   ├── deps.py         # Dependencies
+│       │   │   ├── middleware/     # Auth, rate limiting, CORS
+│       │   │   └── routes/         # Endpoint handlers
+│       │   ├── core/               # ★ Agent Engine
+│       │   │   ├── agent.py        # Orchestrator
+│       │   │   ├── planner.py      # Task decomposition
+│       │   │   ├── reasoner.py     # Reasoning engine
+│       │   │   ├── executor.py     # Tool execution
+│       │   │   ├── reflector.py    # Self-reflection
+│       │   │   ├── router.py       # Intent classification
+│       │   │   └── guardrails.py   # Safety filters
+│       │   ├── providers/          # LLM providers
+│       │   ├── memory/             # Memory systems
+│       │   ├── tools/              # Tool implementations
+│       │   ├── multi_agent/        # Multi-agent orchestration
+│       │   ├── eval/               # Evaluation & metrics
+│       │   └── models/             # Pydantic schemas
+│       └── pyproject.toml
+│
+├── packages/
+│   ├── shared-types/               # Shared TypeScript types
+│   └── ui-kit/                     # Reusable UI components
+│
+├── infra/
+│   ├── docker/
+│   │   ├── Dockerfile.api
+│   │   ├── Dockerfile.web
+│   │   └── docker-compose.yml
+│   └── k8s/                        # Kubernetes manifests
+│
+├── scripts/
+│   ├── seed.py                     # Database seeding
+│   └── migrate.py                  # Database migrations
+│
+├── tests/                          # Test suite
+├── turbo.json                      # Turborepo configuration
+├── .env.example                    # Environment template
+└── README.md
+```
+
+## 📖 API Documentation
+
+### Chat Endpoints
+
+#### POST `/api/v1/chat/completions`
+Send a message to the agent.
+
+```json
+{
+  "message": "What's the weather in Tokyo?",
+  "agent_id": "default",
+  "provider": "openai",
+  "model": "gpt-4-turbo",
+  "stream": true
+}
+```
+
+#### GET `/api/v1/chat/history/{session_id}`
+Retrieve conversation history.
+
+### Agent Endpoints
+
+#### GET `/api/v1/agents`
+List all available agents.
+
+#### POST `/api/v1/agents`
+Create a new agent with custom configuration.
+
+#### PUT `/api/v1/agents/{agent_id}`
+Update agent configuration.
+
+#### DELETE `/api/v1/agents/{agent_id}`
+Delete an agent.
+
+### Provider Endpoints
+
+#### GET `/api/v1/providers`
+List configured providers.
+
+#### POST `/api/v1/providers/test`
+Test provider connectivity.
+
+### Tool Endpoints
+
+#### GET `/api/v1/tools`
+List available tools.
+
+#### POST `/api/v1/tools/register`
+Register a custom tool.
 
 ## 🧪 Testing
 
 ```bash
-# Run tests
-pytest tests/
+# Run all tests
+pytest
 
 # Run with coverage
-pytest tests/ --cov=packages/core
+pytest --cov=src
+
+# Run specific test file
+pytest tests/test_agent.py
+
+# Run frontend tests
+cd apps/web && npm test
 ```
 
-## 📊 Monitoring & Evaluation
+## 🎯 Usage Examples
 
-- Built-in reflection system untuk self-improvement
-- Execution history tracking
-- Memory statistics
-- Performance metrics
+### Basic Chat
 
-## 🔐 Security
+```python
+from src.core.agent import Agent
+from src.providers.openai import OpenAIProvider
 
-- API key management via environment variables
-- CORS configuration
-- Input validation dengan Pydantic
-- Rate limiting (to be implemented)
+provider = OpenAIProvider(api_key="sk-...")
+agent = Agent(provider=provider)
+
+response = await agent.chat("Help me write a Python function to sort a list")
+print(response.content)
+```
+
+### Multi-Step Task
+
+```python
+from src.core.agent import Agent
+from src.memory.long_term import LongTermMemory
+
+memory = LongTermMemory(vector_store="qdrant")
+agent = Agent(memory=memory, enable_reflection=True)
+
+response = await agent.chat(
+    "Research the latest AI trends and summarize them in 3 bullet points"
+)
+print(response.steps)  # Shows planning steps
+print(response.reflection)  # Shows self-evaluation
+```
+
+### Custom Tool
+
+```python
+from src.tools.base import BaseTool, tool
+
+@tool
+def get_weather(city: str) -> str:
+    """Get current weather for a city."""
+    # Implementation here
+    return f"Weather in {city}: Sunny, 25°C"
+
+agent.register_tool(get_weather)
+```
+
+## 📈 Monitoring & Evaluation
+
+The agent includes built-in evaluation metrics:
+
+- **Task Success Rate**: Percentage of successfully completed tasks
+- **Average Steps**: Mean number of steps per task
+- **Token Usage**: Total tokens consumed
+- **Latency**: Response time percentiles
+- **Cost**: Estimated cost per provider
+
+Access the dashboard at `http://localhost:3000/dashboard`
 
 ## 🤝 Contributing
 
-1. Fork repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## 📄 License
 
-MIT License - see LICENSE file for details
+MIT License - see [LICENSE](LICENSE) for details.
 
 ## 🙏 Acknowledgments
 
-- Inspired by ReAct paper (Reasoning + Acting)
-- Concepts from Reflexion framework
-- Architecture patterns from modern AI agents
-
----
-
-**Built with ❤️ by Super Intelligent Agent Team**
+- Inspired by LangChain, AutoGen, and CrewAI
+- Built with ❤️ using FastAPI and Next.js

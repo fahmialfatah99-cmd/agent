@@ -52,6 +52,7 @@ class OpenAIProvider(BaseProvider):
             "messages": [msg.dict() for msg in messages],
             "temperature": kwargs.get("temperature", self.config.temperature),
             "max_tokens": kwargs.get("max_tokens", self.config.max_tokens),
+            "stream": False,
             **self.config.extra_params,
             **kwargs
         }

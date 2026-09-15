@@ -8,7 +8,7 @@ from .planner import Planner, Plan, PlanStep
 from .reasoner import Reasoner, ReasoningTrace
 from .executor import Executor, ExecutionResult
 from .reflector import Reflector, Reflection
-from .agent_loop import AgentLoop, AgentState
+from .agent_loop import AgentLoop, AgentState, AgentLoopConfig
 
 __all__ = [
     "Planner",
@@ -22,4 +22,5 @@ __all__ = [
     "Reflection",
     "AgentLoop",
     "AgentState",
+    "AgentLoopConfig",
 ]

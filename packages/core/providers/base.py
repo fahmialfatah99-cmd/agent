@@ -36,7 +36,7 @@ class ChatCompletion(BaseModel):
     created: int
     model: str
     choices: List[Dict[str, Any]]
-    usage: Dict[str, int]
+    usage: Dict[str, Any]
 
 
 class ProviderConfig(BaseModel):

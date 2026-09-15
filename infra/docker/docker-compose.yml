@@ -1,45 +1,54 @@
 version: '3.8'
 
 services:
+  # API Backend
   api:
     build:
-      context: ../..
-      dockerfile: infra/docker/Dockerfile.api
+      context: ../../apps/api
+      dockerfile: ../../infra/docker/Dockerfile.api
     ports:
       - "8000:8000"
     environment:
-      - LLM_API_KEY=${LLM_API_KEY:-}
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/agent_db
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/superagent
       - REDIS_URL=redis://redis:6379
+      - QDRANT_URL=http://qdrant:6333
     depends_on:
       - db
       - redis
+      - qdrant
     volumes:
-      - ../../packages:/app/packages
-      - ../../apps/api:/app/apps/api
+      - ../../apps/api:/app
+    command: uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 
+  # Frontend
   web:
     build:
-      context: ../..
-      dockerfile: infra/docker/Dockerfile.web
+      context: ../../apps/web
+      dockerfile: ../../infra/docker/Dockerfile.web
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://api:8000
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
     depends_on:
       - api
+    volumes:
+      - ../../apps/web:/app
+      - /app/node_modules
+    command: npm run dev
 
+  # PostgreSQL Database
   db:
     image: postgres:15-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: agent_db
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      POSTGRES_DB: superagent
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
+  # Redis Cache
   redis:
     image: redis:7-alpine
     ports:
@@ -47,10 +56,12 @@ services:
     volumes:
       - redis_data:/data
 
+  # Qdrant Vector Database
   qdrant:
     image: qdrant/qdrant:latest
     ports:
       - "6333:6333"
+      - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
 

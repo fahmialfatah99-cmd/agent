@@ -49,7 +49,7 @@ class OpenAIProvider(BaseProvider):
 
         payload = {
             "model": self.config.model,
-            "messages": [msg.dict() for msg in messages],
+            "messages": [msg.model_dump(exclude_none=True) for msg in messages],
             "temperature": kwargs.get("temperature", self.config.temperature),
             "max_tokens": kwargs.get("max_tokens", self.config.max_tokens),
             "stream": False,
@@ -57,7 +57,7 @@ class OpenAIProvider(BaseProvider):
             **kwargs
         }
 
-        # Remove None values
+        # Remove None values but keep 'tools'/'tool_choice' if provided
         payload = {k: v for k, v in payload.items() if v is not None}
 
         for attempt in range(self.config.retry_attempts):

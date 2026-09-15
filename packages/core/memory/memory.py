@@ -8,6 +8,7 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 from datetime import datetime
 import json
+import os
 
 
 class MemoryEntry(BaseModel):
@@ -124,6 +125,61 @@ class LongTermMemory:
     def size(self) -> int:
         """Get total number of entries."""
         return len(self._entries)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize long-term memory to a dictionary."""
+        return {
+            "entries": [
+                {
+                    **entry.model_dump(mode="json"),
+                    "created_at": entry.created_at.isoformat() if entry.created_at else None,
+                    "updated_at": entry.updated_at.isoformat() if entry.updated_at else None,
+                }
+                for entry in self._entries.values()
+            ]
+        }
+
+    def load_from_dict(self, data: Dict[str, Any]) -> None:
+        """Load long-term memory from a dictionary."""
+        self._entries.clear()
+        self._index = {"episodic": [], "semantic": [], "procedural": []}
+        for item in data.get("entries", []):
+            try:
+                entry = MemoryEntry(
+                    id=item["id"],
+                    content=item.get("content", ""),
+                    type=item.get("type", "episodic"),
+                    created_at=datetime.fromisoformat(item["created_at"]) if item.get("created_at") else datetime.now(),
+                    updated_at=datetime.fromisoformat(item["updated_at"]) if item.get("updated_at") else None,
+                    importance=item.get("importance", 0.5),
+                    access_count=item.get("access_count", 0),
+                    metadata=item.get("metadata", {}),
+                    embeddings=item.get("embeddings"),
+                )
+                self._entries[entry.id] = entry
+                if entry.type in self._index:
+                    self._index[entry.type].append(entry.id)
+            except (KeyError, ValueError):
+                continue
+
+    def save_to_file(self, path: str) -> None:
+        """Persist long-term memory to a JSON file."""
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self.to_dict(), f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    def load_from_file(self, path: str) -> None:
+        """Load long-term memory from a JSON file."""
+        try:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                self.load_from_dict(data)
+        except Exception:
+            pass
 
 
 class ConversationMemory(BaseModel):
@@ -297,3 +353,29 @@ class MemoryManager:
         self.conversation.clear()
         # Note: We don't clear long-term memory by default
         # Use long_term.clear() if needed (would need to be implemented)
+
+    def save_to_file(self, path: str) -> None:
+        """Persist the whole memory manager (long-term) to a JSON file."""
+        self.long_term.save_to_file(path)
+
+    def load_from_file(self, path: str) -> None:
+        """Load persisted memory from a JSON file."""
+        self.long_term.load_from_file(path)
+
+    def remember(self, content: str, importance: float = 0.6) -> MemoryEntry:
+        """Explicitly store a fact into long-term memory (remember command)."""
+        import uuid
+        entry = MemoryEntry(
+            id=str(uuid.uuid4()),
+            content=content,
+            type="semantic",
+            importance=importance,
+            metadata={},
+        )
+        self.long_term.add(entry)
+        self.short_term.add(entry)
+        return entry
+
+    def recall(self, query: str, limit: int = 5) -> List[MemoryEntry]:
+        """Search returned relevant memories across systems (recall command)."""
+        return self.search(query, scope="all")[:limit]

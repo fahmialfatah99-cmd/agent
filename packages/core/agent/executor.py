@@ -29,6 +29,18 @@ class Executor:
         self.tool_registry = tool_registry
         self._tools: Dict[str, Callable] = {}
         self._execution_history: List[ExecutionResult] = []
+        if tool_registry:
+            self.import_from_registry(tool_registry)
+
+    def import_from_registry(self, tool_registry) -> int:
+        """Import all tools from a ToolRegistry into the executor."""
+        imported = 0
+        for definition in tool_registry.list_tools():
+            tool = tool_registry.get(definition.name)
+            if tool:
+                self._tools[definition.name] = tool.execute
+                imported += 1
+        return imported
 
     def register_tool(self, name: str, func: Callable) -> None:
         """Register a tool function."""

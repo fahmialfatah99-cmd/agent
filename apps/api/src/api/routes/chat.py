@@ -13,6 +13,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..
 from core.providers import ProviderType, ProviderConfig, create_provider, Message
 from core.agent import AgentLoop, AgentLoopConfig
 
+# Register tools (Linux system + opencode-equivalent) ke global registry
+import core.tools.linux_agent  # noqa: F401  (auto-register 7 tools)
+import core.tools.opencode_tools  # noqa: F401  (auto-register 4 tools)
+from core.tools import registry
+
 from src.config.settings import settings
 
 router = APIRouter()
@@ -117,7 +122,11 @@ async def run_agent_loop(
                 enable_reflection=enable_reflection,
                 max_iterations=max_iterations,
             )
-            _agents[agent_id] = AgentLoop(provider=provider, config=agent_config)
+            _agents[agent_id] = AgentLoop(
+                provider=provider,
+                tool_registry=registry,
+                config=agent_config,
+            )
 
         agent = _agents[agent_id]
         result = await agent.run(goal=goal, context=context)

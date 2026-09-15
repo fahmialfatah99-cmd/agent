@@ -15,6 +15,10 @@ from src.config.settings import settings
 from core.agent import AgentLoop, AgentLoopConfig
 from core.providers import ProviderType, ProviderConfig, create_provider
 
+# Register tools (Linux system + opencode-equivalent) ke global registry
+import core.tools.linux_agent  # noqa: F401  (auto-register 7 tools)
+import core.tools.opencode_tools  # noqa: F401  (auto-register 4 tools)
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -44,8 +48,10 @@ async def main():
         )
         provider = create_provider(provider_config.provider_type, provider_config)
         await provider.initialize()
+        from core.tools import registry
         agent = AgentLoop(
             provider=provider,
+            tool_registry=registry,
             config=AgentLoopConfig(
                 enable_reflection=True,
                 max_iterations=10,

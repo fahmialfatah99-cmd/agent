@@ -23,10 +23,12 @@ class ProviderType(str, Enum):
 
 class Message(BaseModel):
     """Chat message structure."""
-    role: str  # "system", "user", "assistant"
+    role: str  # "system", "user", "assistant", "tool"
     content: str
     name: Optional[str] = None
     function_call: Optional[Dict[str, Any]] = None
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+    tool_call_id: Optional[str] = None
 
 
 class ChatCompletion(BaseModel):

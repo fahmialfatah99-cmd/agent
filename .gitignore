@@ -35,4 +35,8 @@ requirements.txt.bak
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Next.js
+.next/
+out/
 ```

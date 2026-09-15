@@ -11,6 +11,7 @@
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
     "dev:api": "cd apps/api && uvicorn main:app --reload --host 0.0.0.0 --port 8000",
     "dev:web": "cd apps/web && npm run dev",
+    "bot:telegram": "cd apps/api && python -m src.scripts.run_telegram_bot",
     "build": "npm run build:api && npm run build:web",
     "build:api": "cd apps/api && python -m pytest",
     "build:web": "cd apps/web && npm run build",

@@ -4,9 +4,16 @@ Jalankan dengan: python -m src.scripts.run_telegram_bot
 """
 import asyncio
 import logging
+import os
+import sys
+
+# Add packages to Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..', 'packages')))
+
 from src.services.telegram_bot import create_telegram_bot
-from src.core.agent import AgentLoop
 from src.config.settings import settings
+from core.agent import AgentLoop, AgentLoopConfig
+from core.providers import ProviderType, ProviderConfig, create_provider
 
 # Setup logging
 logging.basicConfig(
@@ -27,11 +34,22 @@ async def main():
     logger.info("\n🧠 Initializing Agent Core...")
     
     try:
+        provider_config = ProviderConfig(
+            provider_type=ProviderType.OPENAI,
+            api_key=settings.OPENAI_API_KEY,
+            base_url=settings.OPENAI_BASE_URL or "http://127.0.0.1:20128/v1",
+            model=settings.DEFAULT_MODEL or "antigravity",
+            temperature=0.7,
+            max_tokens=2048,
+        )
+        provider = create_provider(provider_config.provider_type, provider_config)
+        await provider.initialize()
         agent = AgentLoop(
-            provider_name=settings.DEFAULT_PROVIDER,
-            model_name=settings.DEFAULT_MODEL,
-            enable_tools=True,
-            enable_memory=True,
+            provider=provider,
+            config=AgentLoopConfig(
+                enable_reflection=True,
+                max_iterations=10,
+            ),
         )
         logger.info("✅ Agent Core initialized successfully")
     except Exception as e:

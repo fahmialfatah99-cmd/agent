@@ -28,6 +28,9 @@ google-generativeai>=0.3.0
 # Telegram Bot
 python-telegram-bot[job-queue]>=20.0
 
+# System Tools
+psutil>=5.9.0
+
 # Utilities
 python-dotenv>=1.0.0
 tenacity>=8.2.0

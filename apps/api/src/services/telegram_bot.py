@@ -2,7 +2,9 @@
 Telegram Bot Service
 Menghubungkan Telegram Bot dengan Super Agent Core
 """
+import asyncio
 import logging
+import signal
 from typing import Optional, Dict, Any
 from telegram import Update, ForceReply
 from telegram.ext import (
@@ -129,7 +131,10 @@ class TelegramBotService:
             
             # Jika agent tersedia, gunakan agent core
             if self.agent:
-                response = await self._process_with_agent(user_message, session)
+                response = await asyncio.wait_for(
+                    self._process_with_agent(user_message, session),
+                    timeout=120.0
+                )
             else:
                 # Fallback response jika agent belum di-setup
                 response = {
@@ -149,12 +154,9 @@ class TelegramBotService:
             if len(session["history"]) > 40:
                 session["history"] = session["history"][-40:]
             
-            # Kirim respons utama
-            await update.message.reply_text(
-                response["answer"],
-                parse_mode="Markdown"
-            )
-            
+            # Kirim respons utama (teks biasa — hindari parse_mode yang bisa gagal)
+            await update.message.reply_text(response["answer"])
+
             # Jika ada intermediate steps, kirim sebagai spoiler (thinking process)
             if response.get("steps") and len(response["steps"]) > 0:
                 steps_text = "🧠 *Proses berpikir:*\n"
@@ -169,40 +171,65 @@ class TelegramBotService:
                         parse_mode="MarkdownV2"
                     )
                     
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout processing message from user {user_id}")
+            await update.message.reply_text(
+                "⚠️ Permintaan terlalu lama diproses (timeout).\n"
+                "Silakan coba lagi atau gunakan /reset untuk mereset sesi."
+            )
         except Exception as e:
             logger.error(f"Error processing message from user {user_id}: {e}", exc_info=True)
             await update.message.reply_text(
-                "⚠️ Maaf, terjadi kesalahan saat memproses permintaan Anda.\n\n"
-                f"Error: `{str(e)}`\n\n"
+                "⚠️ Maaf, terjadi kesalahan saat memproses permintaan Anda.\n"
                 "Silakan coba lagi atau gunakan /reset untuk mereset sesi."
             )
 
     async def _process_with_agent(self, user_message: str, session: dict) -> dict:
         """
-        Process message menggunakan Agent Core
+        Process message menggunakan provider chat completion langsung.
         
-        Args:
-            user_message: Pesan dari user
-            session: Session data user
-            
+        Alur penggunaan full AgentLoop (Planner→Reasoner→Executor→Reflector)
+        terlalu lambat untuk chat (ratusan detik). Untuk percakapan langsung
+        dipakai provider.chat_completion dengan riwayat sesi user.
+        
         Returns:
             dict dengan keys: answer, steps, tool_calls
         """
-        # Call agent core
-        response = await self.agent.run(
-            query=user_message,
-            conversation_history=session["history"],
-            context=session["context"]
+        from core.providers import Message
+
+        messages = [
+            Message(
+                role="system",
+                content=(
+                    "Kamu adalah Super Intelligent Agent. Jawab pertanyaan pengguna "
+                    "dengan jelas, ringkas, dan bermanfaat. Gunakan bahasa Indonesia "
+                    "kecuali diminta lain."
+                ),
+            )
+        ]
+        for item in session.get("history", [])[-20:]:
+            messages.append(
+                Message(role=item.get("role", "user"), content=item.get("content", ""))
+            )
+        messages.append(Message(role="user", content=user_message))
+
+        response = await self.agent.provider.chat_completion(
+            messages,
+            temperature=0.7,
         )
-        
-        # Update context jika ada
-        if "context" in response:
-            session["context"].update(response["context"])
-        
-        return response
+
+        content = ""
+        if response.choices:
+            content = response.choices[0].get("message", {}).get("content", "")
+
+        return {
+            "answer": content,
+            "steps": [],
+            "tool_calls": [],
+        }
 
     async def run(self):
-        """Menjalankan bot dengan polling"""
+        """Menjalankan bot dengan polling (async, kompatibel dengan asyncio.run)"""
         logger.info("Starting Telegram Bot...")
         
         self.application = (
@@ -220,15 +247,40 @@ class TelegramBotService:
             MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message)
         )
         
-        # Start polling
+        # Async lifecycle (bukan run_polling yang bersifat blocking)
+        self._stop_event = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                loop.add_signal_handler(sig, self._stop_event.set)
+            except (NotImplementedError, RuntimeError):
+                pass
+        
+        await self.application.initialize()
+        await self.application.start()
+        await self.application.updater.start_polling(
+            allowed_updates=Update.ALL_TYPES
+        )
+        
         logger.info("Bot is running. Press Ctrl+C to stop.")
-        await self.application.run_polling(allowed_updates=Update.ALL_TYPES)
+        await self._stop_event.wait()
+        
+        # Graceful shutdown
+        await self.stop()
 
     async def stop(self):
-        """Menghentikan bot"""
-        if self.application:
-            await self.application.stop()
+        """Menghentikan bot secara graceful"""
+        if not self.application:
+            return
+        try:
+            if self.application.updater.running:
+                await self.application.updater.stop()
+            if self.application.running:
+                await self.application.stop()
+            await self.application.shutdown()
             logger.info("Telegram Bot stopped.")
+        except Exception as e:
+            logger.error(f"Error while stopping bot: {e}")
 
 
 def create_telegram_bot(agent=None) -> Optional[TelegramBotService]:

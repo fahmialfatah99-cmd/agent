@@ -1,0 +1,31 @@
+{
+  "name": "super-intelligent-agent",
+  "version": "1.0.0",
+  "description": "Super Intelligent Agent - More advanced than OpenClaw and Hermes Agent",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "cd apps/api && uvicorn main:app --reload --host 0.0.0.0 --port 8000",
+    "dev:web": "cd apps/web && npm run dev",
+    "build": "npm run build:api && npm run build:web",
+    "build:api": "cd apps/api && python -m pytest",
+    "build:web": "cd apps/web && npm run build",
+    "lint": "eslint . --ext .ts,.tsx",
+    "test": "jest",
+    "docker:build": "docker-compose -f infra/docker/docker-compose.yml build",
+    "docker:up": "docker-compose -f infra/docker/docker-compose.yml up -d",
+    "docker:down": "docker-compose -f infra/docker/docker-compose.yml down"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3",
+    "@types/node": "^20.10.6"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

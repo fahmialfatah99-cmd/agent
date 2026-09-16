@@ -24,9 +24,10 @@ class Executor:
     Executor component that executes actions using available tools.
     """
 
-    def __init__(self, tool_registry=None):
-        """Initialize executor with optional tool registry."""
+    def __init__(self, tool_registry=None, timeout: float = 30.0):
+        """Initialize executor with optional tool registry and default per-step timeout."""
         self.tool_registry = tool_registry
+        self.timeout = timeout
         self._tools: Dict[str, Callable] = {}
         self._execution_history: List[ExecutionResult] = []
         if tool_registry:
@@ -61,11 +62,12 @@ class Executor:
         self,
         action: str,
         args: Optional[Dict[str, Any]] = None,
-        timeout: float = 30.0
+        timeout: Optional[float] = None
     ) -> ExecutionResult:
         """Execute an action with given arguments."""
         import time
         start_time = time.time()
+        timeout = timeout if timeout is not None else self.timeout
 
         # Check if action is a registered tool
         if action in self._tools:
@@ -130,11 +132,12 @@ class Executor:
         self,
         step_description: str,
         tool_name: Optional[str],
-        tool_args: Optional[Dict[str, Any]]
+        tool_args: Optional[Dict[str, Any]],
+        timeout: Optional[float] = None
     ) -> ExecutionResult:
         """Execute a plan step."""
         if tool_name:
-            return await self.execute(tool_name, tool_args)
+            return await self.execute(tool_name, tool_args, timeout=timeout)
         else:
             # For steps without explicit tools, use reasoning
             return ExecutionResult(

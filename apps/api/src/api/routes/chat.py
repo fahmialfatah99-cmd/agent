@@ -121,6 +121,8 @@ async def run_agent_loop(
             agent_config = AgentLoopConfig(
                 enable_reflection=enable_reflection,
                 max_iterations=max_iterations,
+                timeout_per_step=30.0,
+                overall_timeout=120.0,
             )
             _agents[agent_id] = AgentLoop(
                 provider=provider,

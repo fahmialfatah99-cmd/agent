@@ -6,13 +6,16 @@ Includes shell execution, file system manipulation, process management, and netw
 
 import os
 import sys
+import stat
+import signal
+import asyncio
 import subprocess
 import shutil
 import socket
 import psutil
 import json
 from pathlib import Path
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union, Iterator, Tuple
 from dataclasses import dataclass
 
 @dataclass
@@ -29,6 +32,65 @@ class LinuxSystemTools:
     High-privilege toolset for Linux system interaction.
     WARNING: Use with caution. Executes commands with the current user's permissions.
     """
+
+    # Directories that are rarely relevant for "find junk" scans and can be huge.
+    HEAVY_SCAN_DIRS: frozenset = frozenset({
+        "node_modules", ".git", ".svn", ".hg", ".venv", "venv", "env",
+        "__pycache__", ".cache", ".next", ".nuxt", ".turbo", ".tox",
+        ".mypy_cache", ".pytest_cache", ".ruff_cache", "dist", "build",
+        "target", ".gradle", ".angular", "coverage",
+    })
+
+    @staticmethod
+    def walk_paths(
+        path: str,
+        timeout: float = 20.0,
+        max_items: int = 20000,
+        skip_heavy: bool = True,
+    ) -> Iterator[Tuple[Optional[str], bool]]:
+        """
+        Walk a directory tree with a hard time budget and item cap.
+
+        Yields (entry_path, is_dir) tuples. When the walk stops early because
+        the budget was exhausted, it yields (None, reason) once, where reason
+        is "timeout" or "max_items".
+        """
+        import time as time_mod
+
+        deadline = time_mod.monotonic() + timeout if timeout and timeout > 0 else 0
+        limit = max_items if max_items and max_items > 0 else 20000
+
+        start = Path(path).expanduser().resolve()
+        stack = [start]
+        seen = 0
+
+        while stack:
+            current = stack.pop()
+            try:
+                with os.scandir(current) as it:
+                    for entry in it:
+                        if seen >= limit:
+                            yield None, "max_items"
+                            return
+                        if deadline and time_mod.monotonic() > deadline:
+                            yield None, "timeout"
+                            return
+
+                        seen += 1
+                        try:
+                            st = entry.stat(follow_symlinks=False)
+                        except (PermissionError, OSError):
+                            yield entry.path, False
+                            continue
+
+                        is_dir = stat.S_ISDIR(st.st_mode)
+                        if is_dir and skip_heavy and entry.name in LinuxSystemTools.HEAVY_SCAN_DIRS:
+                            continue
+                        if is_dir:
+                            stack.append(entry.path)
+                        yield entry.path, is_dir
+            except (PermissionError, OSError):
+                continue
 
     @staticmethod
     def execute_shell_command(command: str, timeout: int = 60, cwd: Optional[str] = None) -> CommandResult:
@@ -69,6 +131,64 @@ class LinuxSystemTools:
                 stdout="",
                 stderr=f"Command timed out after {timeout} seconds",
                 return_code=-1,
+                command=command
+            )
+        except Exception as e:
+            return CommandResult(
+                success=False,
+                stdout="",
+                stderr=str(e),
+                return_code=-1,
+                command=command
+            )
+
+    @staticmethod
+    async def aexecute_shell_command(command: str, timeout: int = 30, cwd: Optional[str] = None) -> CommandResult:
+        """
+        Execute a shell command asynchronously.
+
+        Unlike execute_shell_command (which blocks a thread and cannot be
+        interrupted), this runs in the event loop and the subprocess is killed
+        when the timeout fires, so timeouts return fast and leave no stray
+        processes scanning the disk.
+        """
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=cwd,
+                env=os.environ,
+                start_new_session=True,
+            )
+            try:
+                stdout_b, stderr_b = await asyncio.wait_for(
+                    proc.communicate(), timeout=timeout
+                )
+            except asyncio.TimeoutError:
+                # Kill the whole process group so grandchildren (e.g. `sleep 30`,
+                # `du /`) don't keep the pipes open and stall the timeout.
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                except (ProcessLookupError, PermissionError, OSError):
+                    try:
+                        proc.kill()
+                    except ProcessLookupError:
+                        pass
+                stdout_b, stderr_b = await proc.communicate()
+                return CommandResult(
+                    success=False,
+                    stdout=stdout_b.decode(errors="replace"),
+                    stderr=f"Command timed out after {timeout} seconds\n{stderr_b.decode(errors='replace')}",
+                    return_code=-1,
+                    command=command
+                )
+
+            return CommandResult(
+                success=proc.returncode == 0,
+                stdout=stdout_b.decode(errors="replace"),
+                stderr=stderr_b.decode(errors="replace"),
+                return_code=proc.returncode,
                 command=command
             )
         except Exception as e:
@@ -124,30 +244,75 @@ class LinuxSystemTools:
             return {"success": False, "error": str(e)}
 
     @staticmethod
-    def list_directory(path: str, recursive: bool = False) -> Dict[str, Any]:
+    def list_directory(
+        path: str,
+        recursive: bool = False,
+        timeout: float = 30.0,
+        max_items: int = 20000,
+        skip_heavy: bool = True,
+    ) -> Dict[str, Any]:
         """List directory contents with detailed metadata."""
         try:
             dir_path = Path(path).expanduser().resolve()
             if not dir_path.is_dir():
                 return {"success": False, "error": "Not a directory"}
-            
+
+            # Hard safety caps: regardless of what the caller/LLM passes, a
+            # recursive listing can never run away for minutes.
+            timeout = min(float(timeout or 0) if timeout else 30.0, 30.0)
+            max_items = min(int(max_items) if max_items else 20000, 20000)
+
             files = []
-            iterator = dir_path.rglob('*') if recursive else dir_path.iterdir()
-            
-            for item in iterator:
-                try:
-                    stat = item.stat()
-                    files.append({
-                        "name": item.name,
-                        "path": str(item),
-                        "type": "directory" if item.is_dir() else "file",
-                        "size": stat.st_size,
-                        "permissions": oct(stat.st_mode)[-3:]
-                    })
-                except PermissionError:
-                    files.append({"name": item.name, "path": str(item), "error": "Permission denied"})
-            
-            return {"success": True, "count": len(files), "contents": files}
+            stop_reason = None
+
+            if recursive:
+                for item_path, is_dir in LinuxSystemTools.walk_paths(
+                    str(dir_path), timeout=timeout, max_items=max_items, skip_heavy=skip_heavy
+                ):
+                    if item_path is None:
+                        stop_reason = is_dir  # "timeout" or "max_items"
+                        break
+                    try:
+                        p = Path(item_path)
+                        st = p.stat()
+                        files.append({
+                            "name": p.name,
+                            "path": str(p),
+                            "type": "directory" if is_dir else "file",
+                            "size": st.st_size,
+                            "permissions": oct(st.st_mode)[-3:]
+                        })
+                    except PermissionError:
+                        files.append({"name": str(p), "path": str(p), "error": "Permission denied"})
+                    except OSError:
+                        pass
+            else:
+                iterator = dir_path.iterdir()
+                if max_items and max_items > 0:
+                    iterator = (e for i, e in enumerate(iterator) if i < max_items)
+                for item in iterator:
+                    try:
+                        stat_res = item.stat()
+                        files.append({
+                            "name": item.name,
+                            "path": str(item),
+                            "type": "directory" if item.is_dir() else "file",
+                            "size": stat_res.st_size,
+                            "permissions": oct(stat_res.st_mode)[-3:]
+                        })
+                    except PermissionError:
+                        files.append({"name": item.name, "path": str(item), "error": "Permission denied"})
+                    except OSError:
+                        pass
+
+            result: Dict[str, Any] = {
+                "success": True,
+                "count": len(files),
+                "contents": files,
+                "truncated": stop_reason is not None,
+                "truncated_reason": stop_reason,
+            }
+            return result
         except Exception as e:
             return {"success": False, "error": str(e)}
 

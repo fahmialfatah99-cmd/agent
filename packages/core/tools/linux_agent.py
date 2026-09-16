@@ -4,6 +4,7 @@ Wraps LinuxSystemTools into proper tool classes for agent registry.
 """
 
 from typing import Dict, Any, Optional, List
+import asyncio
 from .registry import BaseTool, ToolResult, tool, registry
 from .linux_system import LinuxSystemTools
 
@@ -15,19 +16,22 @@ class ShellExecuteTool(BaseTool):
     description = "Execute any shell command on the Linux system with full environment access"
     category = "system"
     
-    async def execute(self, command: str, timeout: int = 60, cwd: Optional[str] = None) -> ToolResult:
+    async def execute(self, command: str, timeout: int = 30, cwd: Optional[str] = None) -> ToolResult:
         """
         Execute a shell command.
-        
+
         Args:
             command: The shell command to execute
-            timeout: Maximum execution time in seconds (default: 60)
+            timeout: Maximum execution time in seconds (default: 30, hard cap: 60)
             cwd: Working directory for the command
-        
+
         Returns:
             ToolResult with stdout, stderr, and return code
         """
-        result = LinuxSystemTools.execute_shell_command(command, timeout, cwd)
+        # Prevent runaway commands from hanging the agent for minutes.
+        timeout = min(max(int(timeout or 30), 1), 60)
+
+        result = await LinuxSystemTools.aexecute_shell_command(command, timeout, cwd)
         
         return ToolResult(
             success=result.success,
@@ -122,24 +126,52 @@ class DirectoryListTool(BaseTool):
     description = "List contents of a directory with detailed metadata"
     category = "filesystem"
     
-    async def execute(self, path: str, recursive: bool = False) -> ToolResult:
+    async def execute(
+        self,
+        path: str,
+        recursive: bool = False,
+        timeout: float = 30.0,
+        max_items: int = 20000,
+        skip_heavy: bool = True,
+    ) -> ToolResult:
         """
         List directory contents.
-        
+
         Args:
             path: Path to the directory
             recursive: If True, list recursively
-        
+            timeout: Max seconds for a recursive scan (default: 30)
+            max_items: Max entries returned before truncating
+            skip_heavy: Skip huge dirs (node_modules, .git, .venv, etc.)
+
         Returns:
             ToolResult with directory listing
         """
-        result = LinuxSystemTools.list_directory(path, recursive)
+        # Defense in depth: never let a recursive scan run away.
+        timeout = min(float(timeout or 30.0), 30.0)
+        max_items = min(int(max_items) if max_items else 20000, 20000)
+
+        # Run the (bounded) blocking scan in a thread so the event loop stays
+        # responsive and the executor's timeout can always interrupt us.
+        result = await asyncio.to_thread(
+            LinuxSystemTools.list_directory,
+            path,
+            recursive,
+            timeout=timeout,
+            max_items=max_items,
+            skip_heavy=skip_heavy,
+        )
         
         if result["success"]:
             return ToolResult(
                 success=True,
                 output=result["contents"],
-                metadata={"count": result["count"], "recursive": recursive}
+                metadata={
+                    "count": result["count"],
+                    "recursive": recursive,
+                    "truncated": result.get("truncated", False),
+                    "truncated_reason": result.get("truncated_reason"),
+                }
             )
         else:
             return ToolResult(

@@ -23,16 +23,32 @@ class GlobSearchTool(BaseTool):
     description = "Find files matching a glob pattern (e.g. **/*.py, src/**/*.ts). Returns matching file paths."
     category = "filesystem"
 
-    async def execute(self, pattern: str, path: str = ".") -> ToolResult:
+    async def execute(
+        self,
+        pattern: str,
+        path: str = ".",
+        skip_heavy: bool = True,
+        max_results: int = 200,
+    ) -> ToolResult:
         try:
             base = Path(path).expanduser().resolve()
-            matched = [str(p) for p in base.glob(pattern)]
-            if len(matched) > 200:
-                truncated = matched[:200]
+            heavy = LinuxSystemTools.HEAVY_SCAN_DIRS
+
+            matched = []
+            for p in base.glob(pattern):
+                if skip_heavy:
+                    parts = set(p.parts)
+                    if parts & heavy:
+                        continue
+                matched.append(str(p))
+                if len(matched) >= max_results:
+                    break
+
+            if len(matched) >= max_results and max_results > 0:
                 result = {
                     "count": len(matched),
                     "truncated": True,
-                    "matches": truncated,
+                    "matches": matched,
                 }
             else:
                 result = {"count": len(matched), "matches": matched}
@@ -57,25 +73,46 @@ class GrepSearchTool(BaseTool):
         path: str = ".",
         include: Optional[str] = None,
         max_results: int = 50,
+        timeout: float = 20.0,
+        skip_heavy: bool = True,
+        max_files: int = 5000,
     ) -> ToolResult:
         try:
             base = Path(path).expanduser().resolve()
+            regex = re.compile(pattern)
+
+            # Hard safety caps regardless of caller-provided values.
+            timeout = min(float(timeout or 20.0), 20.0)
+            max_files = min(int(max_files) if max_files else 5000, 5000)
+
+            results = []
+            total_matches = 0
+            scan_truncated = None
+
             if base.is_file():
                 files = [base]
             else:
-                files = list(base.rglob("*"))
+                collected = []
+                for p, is_dir in LinuxSystemTools.walk_paths(
+                    str(base), timeout=timeout, max_items=max_files, skip_heavy=skip_heavy
+                ):
+                    if p is None:
+                        scan_truncated = is_dir  # "timeout" or "max_items"
+                        break
+                    if is_dir:
+                        continue
+                    collected.append(Path(p))
+                files = collected
 
-            regex = re.compile(pattern)
-            results = []
-            total_matches = 0
+            inc_pattern = None
+            if include:
+                inc_pattern = re.compile(include.replace("*", ".*"))
 
             for file in files:
-                if file.is_dir():
+                if total_matches >= max_results:
+                    break
+                if inc_pattern and not inc_pattern.search(str(file)):
                     continue
-                if include:
-                    inc_pattern = re.compile(include.replace("*", ".*"))
-                    if not inc_pattern.search(str(file)):
-                        continue
                 # Skip binary-ish files
                 try:
                     if len(file.read_bytes()) > 2_000_000:
@@ -93,16 +130,19 @@ class GrepSearchTool(BaseTool):
                         })
                         total_matches += 1
                         if total_matches >= max_results:
-                            return ToolResult(success=True, output={
-                                "count": total_matches,
-                                "truncated": True,
-                                "matches": results,
-                            })
+                            break
 
-            return ToolResult(success=True, output={
+            output: Dict[str, Any] = {
                 "count": total_matches,
                 "matches": results,
-            })
+            }
+            if total_matches >= max_results:
+                output["truncated"] = True
+            if scan_truncated:
+                output["scan_truncated"] = True
+                output["scan_reason"] = scan_truncated
+
+            return ToolResult(success=True, output=output)
         except Exception as e:
             return ToolResult(success=False, error=str(e))
 
